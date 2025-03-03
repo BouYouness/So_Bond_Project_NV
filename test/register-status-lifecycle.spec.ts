@@ -7,12 +7,14 @@ import Ganache from "ganache";
 import { Web3FunctionProvider } from "@saturn-chain/web3-functions";
 import { EthProviderInterface } from "@saturn-chain/dlt-tx-data-functions";
 
-import allContracts from "../contracts";
+//import allContracts from "../contracts";
 import { SmartContract, SmartContractInstance } from "@saturn-chain/smart-contract";
 import { blockGasLimit, makeReadyGas, mintGas, registerGas } from "./gas.constant";
 import { makeBondDate } from "./dates";
+const { ethers } = require("hardhat");
 
 const RegisterContractName = "Register";
+
 const PrimaryIssuanceContractName = "PrimaryIssuance";
 
 describe("Register (Bond Issuance)", function () {
@@ -55,9 +57,9 @@ describe("Register (Bond Issuance)", function () {
     // const couponDates = [1309302208, 1309402208]; //UTC
     // const defaultCutofftime = 17 * 3600; //17:00
 
-    if (allContracts.get(RegisterContractName)) {
-      Register = allContracts.get(RegisterContractName);
-      registerInstance = await Register.deploy(
+    if (RegisterContractName) {
+      const Registercontract = await ethers.getContractFactory(RegisterContractName);
+      registerInstance = await Registercontract.deploy(
         cak.newi({ maxGas: registerGas }),
         bondName,
         isin,
@@ -120,8 +122,9 @@ describe("Register (Bond Issuance)", function () {
       // implicit: register has been minted
 
       await registerInstance.grantBndRole(cak.send({ maxGas: 100000 }), bndAddress);
-      const primaryInstance = await allContracts
-        .get(PrimaryIssuanceContractName)
+
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primaryInstance = await Primary
         .deploy(bnd.newi({ maxGas: 1000000 }), registerInstance.deployedAt, 1500);
 
       //whitelist the Primary
@@ -155,8 +158,8 @@ describe("Register (Bond Issuance)", function () {
     it('It should create a new bond, force some balances then force its issuance', async () => {
 
       // Deploy the Primary issuance smart contract
-      const primaryInstance = await allContracts
-        .get(PrimaryIssuanceContractName)
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primaryInstance = await Primary
         .deploy(bnd.newi({ maxGas: 1000000 }), registerInstance.deployedAt, 100*10000);
 
       //whitelist the Primary Issuance contract

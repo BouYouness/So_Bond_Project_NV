@@ -7,11 +7,13 @@ import Ganache from "ganache";
 import { Web3FunctionProvider } from "@saturn-chain/web3-functions";
 import { EthProviderInterface } from "@saturn-chain/dlt-tx-data-functions";
 
-import allContracts from "../contracts";
+//import allContracts from "../contracts";
 import { SmartContract, SmartContractInstance } from "@saturn-chain/smart-contract";
 import { blockGasLimit, registerGas } from "./gas.constant";
 import { addPart, blockTimestamp, initWeb3Time, makeBondDate, mineBlock } from "./dates";
 import { collectEvents, getEvents } from "./events";
+
+const {ethers} = require("hardhat");
 
 const RegisterContractName = "Register";
 const CouponTradeContractName = "Coupon";
@@ -47,8 +49,8 @@ describe("Register (Bond Issuance) metadata", function () {
     const couponDates = initialBondDates.couponDates
     const defaultCutofftime = initialBondDates.defaultCutofftime
 
-    if (allContracts.get(RegisterContractName)) {
-      Register = allContracts.get(RegisterContractName);
+    if (RegisterContractName) {
+      Register = await ethers.getContractFactory(RegisterContractName);
       instance = await Register.deploy(
         cak.newi({ maxGas: registerGas+100000 }),
         bondName,
@@ -244,8 +246,8 @@ describe("Register (Bond Issuance) metadata", function () {
         const recordDate = addPart(couponDate, "D", -1);
         if (couponDate <= datetime) {
           await mineBlock(recordDate-1); // go to the date of the coupon but just before 
-          let coupon = await allContracts
-            .get(CouponTradeContractName)
+          const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+          let coupon = await Coupon
             .deploy(pay.newi({ maxGas: 2_000_000 }), instance.deployedAt, couponDate, 360, recordDate, initialBondDates.defaultCutofftime);
           if (hash == "") {
             hash = await instance.atReturningHash(cak.call(), coupon.deployedAt);

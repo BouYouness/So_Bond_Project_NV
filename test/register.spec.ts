@@ -7,10 +7,11 @@ import Ganache from "ganache";
 import { Web3FunctionProvider } from "@saturn-chain/web3-functions";
 import { EthProviderInterface } from "@saturn-chain/dlt-tx-data-functions";
 
-import allContracts from "../contracts";
+//import allContracts from "../contracts";
 import { SmartContract, SmartContractInstance } from "@saturn-chain/smart-contract";
 import { blockGasLimit, mintGas, registerGas } from "./gas.constant";
 import { makeBondDate } from "./dates";
+const { ethers } = require("hardhat");
 
 const RegisterContractName = "Register";
 
@@ -43,9 +44,9 @@ describe("Run tests on Register (Bond Issuance) contract", function () {
     // const couponDates = [1309302208, 1309402208]; //UTC
     // const defaultCutofftime = 17 * 3600; //17:00
 
-    if (allContracts.get(RegisterContractName)) {
-      Register = allContracts.get(RegisterContractName);
-      instance = await Register.deploy(
+    if (RegisterContractName) {
+      const Registercontract = await ethers.getContractFactory(RegisterContractName);
+      instance = await Registercontract.deploy(
         cak.newi({ maxGas: registerGas }),
         bondName,
         isin,

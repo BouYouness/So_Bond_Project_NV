@@ -6,11 +6,12 @@ import Web3 from "web3";
 import Ganache from "ganache";
 import { Web3FunctionProvider } from "@saturn-chain/web3-functions";
 import { EthProviderInterface } from "@saturn-chain/dlt-tx-data-functions";
-import allContracts from "../contracts";
+//import allContracts from "../contracts";
 import { SmartContract, SmartContractInstance } from "@saturn-chain/smart-contract";
 import { blockGasLimit, makeReadyGas, registerGas } from "./gas.constant";
 import { addPart, blockTimestamp, initWeb3Time, makeBondDate, makeDateTime, mineBlock } from "./dates";
 import { closeEvents, collectEvents, getEvents } from "./events";
+const {ethers} = require("hardhat");
 
 const RegisterContractName = "Register";
 const PrimaryIssuanceContractName = "PrimaryIssuance";
@@ -70,9 +71,9 @@ describe("Run tests of the Coupon process", function () {
     // const couponDates = [firstCouponDate, 1671408000, 1672358400]; //UTC [17/12/2022/0h, 19/12/2022/0h, 30/12/2022/0h]
     // const defaultCutofftime = 17 * 3600; //17:00
 
-    if (allContracts.get(RegisterContractName)) {
-      registerContract = allContracts.get(RegisterContractName);
-      register = await registerContract.deploy(
+    if (RegisterContractName) {
+      const Registercontract = await ethers.getContractFactory(RegisterContractName);
+      register = await Registercontract.deploy(
         cak.newi({ maxGas: registerGas }),
         bondName,
         isin,
@@ -112,7 +113,8 @@ describe("Run tests of the Coupon process", function () {
     await register.makeReady(cak.send({maxGas: makeReadyGas}));
     
     //initialization of he register  post issuance
-    const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 100*10_000);
+    const Primary = await ethers.getContractFactory(PrimaryIssuanceContractName);
+    const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 100*10_000);
     
     await register.balanceOf(bnd.call(), await bnd.account());
     
@@ -124,7 +126,8 @@ describe("Run tests of the Coupon process", function () {
     await primary.validate(bnd.send({maxGas: gas}));
     
     //deploy bilateral trade
-    const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+    const Trade = await ethers.getContractFactory(BilateralTradeContractName);
+    const trade = await Trade.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       
     let hash2 = await register.atReturningHash(cak.call(), trade.deployedAt);
     await register.enableContractToWhitelist(cak.send({maxGas:100000}), hash2);
@@ -174,8 +177,9 @@ describe("Run tests of the Coupon process", function () {
     it('should fail to deploy the coupon smart contract when the deployer has not the PAY role', async () => {
       const isPay = await register.isPay(payer.call(), await payer.account());
       expect(isPay).to.be.true;
-
-      await expect(allContracts.get(CouponTradeContractName).deploy(cak.newi({maxGas:maxGasAmount}), register.deployedAt, firstCouponDate, 1500, firstCouponDate, 300000)).to.be.rejectedWith("Sender must be a Paying calculation agent");
+      
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      await expect(Coupon.deploy(cak.newi({maxGas:maxGasAmount}), register.deployedAt, firstCouponDate, 1500, firstCouponDate, 300000)).to.be.rejectedWith("Sender must be a Paying calculation agent");
 
       //function setDateAsCurrentCoupon()
     });
@@ -183,8 +187,8 @@ describe("Run tests of the Coupon process", function () {
     it('should fail to deploy the coupon smart contract when the Coupon Date does not exist', async () => {
       const isPay = await register.isPay(payer.call(), await payer.account());
       expect(isPay).to.be.true;
-
-      const p = allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:1000000}), register.deployedAt, addPart(firstCouponDate, "D", 1) , 1500, firstCouponDate, 300000)
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const p = Coupon.deploy(payer.newi({maxGas:1000000}), register.deployedAt, addPart(firstCouponDate, "D", 1) , 1500, firstCouponDate, 300000)
       await expect(p).to.be.rejectedWith("this couponDate does not exists");
 
       //function setDateAsCurrentCoupon()
@@ -195,8 +199,8 @@ describe("Run tests of the Coupon process", function () {
     it('should deploy the coupon smart contract and check if Coupon Date exists', async () => {
       const isPay = await register.isPay(payer.call(), await payer.account());
       expect(isPay).to.be.true;
-       
-      const coupon = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, firstCouponDate, 1500, addPart(firstCouponDate, "D", -1), 8);
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon = await Coupon.deploy(payer.newi({maxGas:2000000}), register.deployedAt, firstCouponDate, 1500, addPart(firstCouponDate, "D", -1), 8);
 
       //function setDateAsCurrentCoupon()
     });
@@ -204,10 +208,9 @@ describe("Run tests of the Coupon process", function () {
     it("should deploy the coupon and get paymentID for an investor (max 16 hexa chars excluding 0x)", async () => {
       const isPay = await register.isPay(payer.call(), await payer.account());
       expect(isPay).to.be.true;
-    
-      const coupon = await allContracts
-        .get(CouponTradeContractName)
-        .deploy(payer.newi({ maxGas: 2000000 }), register.deployedAt, firstCouponDate, 1500, addPart(firstCouponDate, "D", -1), 8);
+
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon = Coupon.deploy(payer.newi({ maxGas: 2000000 }), register.deployedAt, firstCouponDate, 1500, addPart(firstCouponDate, "D", -1), 8);
       const investorAddress1 = await investorA.account();
       const concatenated = web3.utils.encodePacked(coupon.deployedAt, investorAddress1); //abi.encodePacked
       const expectedPaymentId = web3.utils.keccak256(concatenated ?? "").substring(0, 18);
@@ -221,8 +224,9 @@ describe("Run tests of the Coupon process", function () {
     it('should deploy the coupon smart contract and initialize the status', async () => {
       const isPay = await register.isPay(payer.call(), await payer.account());
       expect(isPay).to.be.true;
-       
-      const coupon = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, firstCouponDate, 1500, addPart(firstCouponDate, "D", -1), 8);
+      
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon = await Coupon.deploy(payer.newi({maxGas:2000000}), register.deployedAt, firstCouponDate, 1500, addPart(firstCouponDate, "D", -1), 8);
       
       expect(await coupon.status(payer.call())).to.equal('0');
       //function setDateAsCurrentCoupon()
@@ -236,8 +240,8 @@ describe("Run tests of the Coupon process", function () {
       const couponDate = firstCouponDate; // 17 dec 2022 00:00:00
       const recordDate = addPart(firstCouponDate, "D", -11);
       const cutofftime = 55000; //15:16:40
-      const coupon = await allContracts
-        .get(CouponTradeContractName)
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon = await Coupon
         .deploy(payer.newi({ maxGas: 2000000 }), register.deployedAt, couponDate, 1500, recordDate, cutofftime);
     
       let hash = await register.atReturningHash(cak.call(), coupon.deployedAt);
@@ -257,8 +261,8 @@ describe("Run tests of the Coupon process", function () {
       const recordDate = addPart(firstCouponDate, "D", -1);
       const cutofftime = 55000; //15:16:40
       const expectedCurrentTS = recordDate + cutofftime;
-      const coupon = await allContracts
-        .get(CouponTradeContractName)
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon = await Coupon
         .deploy(payer.newi({ maxGas: 2000000 }), register.deployedAt, couponDate, 1500, recordDate, cutofftime);
     
       let hash = await register.atReturningHash(cak.call(), coupon.deployedAt);
@@ -278,8 +282,9 @@ describe("Run tests of the Coupon process", function () {
       expect(isPay).to.be.true;
 
       const couponDate = firstCouponDate;
-       
-      const coupon = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, 1500, addPart(firstCouponDate, "D", -1), 55000);
+
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName); 
+      const coupon = await Coupon.deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, 1500, addPart(firstCouponDate, "D", -1), 55000);
       
       let hash = await register.atReturningHash(cak.call(), coupon.deployedAt);
       await register.enableContractToWhitelist(cak.send({maxGas:100000}), hash);
@@ -302,8 +307,9 @@ describe("Run tests of the Coupon process", function () {
       expect(isPay).to.be.true;
 
       const couponDate = firstCouponDate;
-       
-      const coupon = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, 100, addPart(firstCouponDate, "D", -1), 8);
+
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName); 
+      const coupon = await Coupon.deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, 100, addPart(firstCouponDate, "D", -1), 8);
       
       let hash = await register.atReturningHash(cak.call(), coupon.deployedAt);
       await register.enableContractToWhitelist(cak.send({maxGas:100000}), hash);
@@ -327,8 +333,9 @@ describe("Run tests of the Coupon process", function () {
       expect(isPay).to.be.true;
 
       const couponDate = firstCouponDate;
-       
-      const coupon = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, 100, addPart(firstCouponDate, "D", -1), 8);
+      
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon = await Coupon.deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, 100, addPart(firstCouponDate, "D", -1), 8);
       
       let hash = await register.atReturningHash(cak.call(), coupon.deployedAt);
       await register.enableContractToWhitelist(cak.send({maxGas:100000}), hash);
@@ -360,7 +367,8 @@ describe("Run tests of the Coupon process", function () {
       //First trade is in init() function 
       //Given the second trade is created
       //deploy second bilateral trade for investor B
-      const trade2 = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:2000000}), register.deployedAt, await investorB.account());
+      const Trade2 = await ethers.getContractFactory(BilateralTradeContractName);
+      const trade2 = await Trade2.deploy(bnd.newi({maxGas:2000000}), register.deployedAt, await investorB.account());
             
       //whitelist bilateral trade
       let hash2 = await register.atReturningHash(cak.call(), trade2.deployedAt);
@@ -382,8 +390,9 @@ describe("Run tests of the Coupon process", function () {
       let nbDaysInPeriod = 100;
       let cutOffTimeInSec = 16 * 3600;
       const couponDate = firstCouponDate;
-       
-      const coupon2 = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, addPart(couponDate, "D", -1), cutOffTimeInSec);
+
+      const Coupon1 = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon2 = await Coupon1.deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, addPart(couponDate, "D", -1), cutOffTimeInSec);
       
       //whitelist of the coupon smart contract into the register
       let hash = await register.atReturningHash(cak.call(), coupon2.deployedAt);
@@ -415,7 +424,8 @@ describe("Run tests of the Coupon process", function () {
       //First trade is in init() function 
       //Given the third trade is created
       //deploy second third trade for investor C
-      const trade3 = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:2000000}), register.deployedAt, await investorC.account());
+      const Trade = await ethers.getContractFactory(BilateralTradeContractName);
+      const trade3 = await Trade.deploy(bnd.newi({maxGas:2000000}), register.deployedAt, await investorC.account());
             
       //whitelist bilateral trade
       let hash3 = await register.atReturningHash(cak.call(), trade3.deployedAt);
@@ -435,7 +445,8 @@ describe("Run tests of the Coupon process", function () {
 
 
       //test of the coupon
-      const coupon3 = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, addPart(couponDate, "D", -1), cutOffTimeInSec);
+      const Coupon3 = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon3 = await Coupon3.deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, addPart(couponDate, "D", -1), cutOffTimeInSec);
       
       hash3 = await register.atReturningHash(cak.call(), coupon3.deployedAt);
       await register.enableContractToWhitelist(cak.send({maxGas:200000}), hash3);
@@ -465,7 +476,8 @@ describe("Run tests of the Coupon process", function () {
       //First trade is in init() function 
       // Given the 4th trade is created
       //deploy the 4th bilateral trade for investor D
-      const trade4 = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:2000000}), register.deployedAt, await investorD.account());
+      const Trade4 = await ethers.getContractFactory(BilateralTradeContractName);
+      const trade4 = await Trade4.deploy(bnd.newi({maxGas:2000000}), register.deployedAt, await investorD.account());
       
       //whitelist bilateral trade
       let hash4 = await register.atReturningHash(cak.call(), trade4.deployedAt);
@@ -484,7 +496,8 @@ describe("Run tests of the Coupon process", function () {
       await trade4.executeTransfer(bnd.send({maxGas:200000}));
 
       //test of the coupon
-      const coupon4 = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, addPart(couponDate, "D", -1), cutOffTimeInSec);
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon4 = await Coupon.deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, addPart(couponDate, "D", -1), cutOffTimeInSec);
       
       hash4 = await register.atReturningHash(cak.call(), coupon4.deployedAt);
       await register.enableContractToWhitelist(cak.send({maxGas:200000}), hash4);
@@ -536,7 +549,8 @@ describe("Run tests of the Coupon process", function () {
 
       
       //Given a first coupon is deployed
-      const coupon = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, addPart(couponDate, "D", -1), cutOffTimeInSec);
+      const Coupon1 = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon = await Coupon1.deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, addPart(couponDate, "D", -1), cutOffTimeInSec);
       
       
       let hash = await register.atReturningHash(cak.call(), coupon.deployedAt);
@@ -552,7 +566,8 @@ describe("Run tests of the Coupon process", function () {
       await register.transferFrom(cak.send({maxGas:400000}), await bnd.account(), await investorB.account(), 100);
       
       // but should fail creating a coupon on the same date when the snapshot has already been taken
-      const coupon2 = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, addPart(couponDate, "D", -1), cutOffTimeInSec+100);
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon2 = await Coupon.deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, addPart(couponDate, "D", -1), cutOffTimeInSec+100);
       await expect(coupon2.setDateAsCurrentCoupon(payer.send({maxGas: 300000}))).to.be.rejectedWith(/Date of coupon or maturity already taken/); 
       
       await collectEvents(cak, register);
@@ -571,7 +586,8 @@ describe("Run tests of the Coupon process", function () {
       let nbDaysInPeriod = 100;
       let cutOffTimeInSec = 17 * 3600;
       //Given a first coupon is deployed
-      const coupon = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
+      const Coupon1 = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon = await Coupon1.deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
 
 
       let hash = await register.atReturningHash(cak.call(), coupon.deployedAt);
@@ -656,7 +672,9 @@ describe("Run tests of the Coupon process", function () {
       //Given a second coupon is deployed
       couponDate = firstCouponDate + 2 * 24 * 3600;
       recordDate = addPart(couponDate, "D", -1);
-      const coupon2 = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
+
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon2 = await Coupon.deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
       
       let balAbefore = await register.balanceOf(cak.call(), await investorA.account());
       let balBbefore = await register.balanceOf(cak.call(), await investorB.account());
@@ -761,7 +779,8 @@ describe("Run tests of the Coupon process", function () {
       let cutOffTimeInSec = 17 * 3600;
 
       //Given a first coupon is deployed
-      const coupon = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:maxGasAmount}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
+      const Coupon1 = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon = await Coupon1.deploy(payer.newi({maxGas:maxGasAmount}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
       
       let hash = await register.atReturningHash(cak.call(), coupon.deployedAt);
       await register.enableContractToWhitelist(cak.send({maxGas:100000}), hash);
@@ -871,8 +890,9 @@ describe("Run tests of the Coupon process", function () {
       //Given a second coupon is deployed
       couponDate = firstCouponDate + 2 * 24 * 3600;
       recordDate = addPart(couponDate, "D", -1);
-    
-      const coupon2 = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:maxGasAmount}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
+
+      const Coupon2 = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon2 = await Coupon2.deploy(payer.newi({maxGas:maxGasAmount}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
 
       //do a transfer 1 so the balance moves
       let gas = await register.transferFrom(cak.test(), await investorA.account(), await investorB.account(), 12)
@@ -1038,8 +1058,9 @@ describe("Run tests of the Coupon process", function () {
       //Given a second coupon is deployed
       couponDate = couponDate + 2 * 24 * 3600;
       recordDate = addPart(couponDate, "D", -1);
-
-      const coupon3 = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:maxGasAmount}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
+      
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon3 = await Coupon.deploy(payer.newi({maxGas:maxGasAmount}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
       
       //check balances before transfer 1
       let balAbeforetransfer3 = await register.balanceOf(cak.call(), await investorA.account());
@@ -1192,7 +1213,8 @@ describe("Run tests of the Coupon process", function () {
 
 
       //Given a first coupon is deployed
-      const coupon4 = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
+      const Coupon4 = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon4 = await Coupon4.deploy(payer.newi({maxGas:2000000}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
       
       let hash = await register.atReturningHash(cak.call(), coupon4.deployedAt);
       await register.enableContractToWhitelist(cak.send({maxGas:100000}), hash);
@@ -1363,8 +1385,9 @@ describe("Run tests of the Coupon process", function () {
       //Given a second coupon is deployed
       couponDate = couponDate + 2 * 24 * 3600;
       recordDate = addPart(couponDate, "D", -1);
-
-      const coupon5 = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:maxGasAmount}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
+      
+      const Coupon5 = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon5 = await Coupon5.deploy(payer.newi({maxGas:maxGasAmount}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
       
       //check balances before transfer 1
       let balAbeforetransfer1 = await register.balanceOf(cak.call(), await investorA.account());
@@ -1538,8 +1561,9 @@ describe("Run tests of the Coupon process", function () {
       //Given a second coupon is deployed
       couponDate = couponDate + 2 * 24 * 3600;
       recordDate = addPart(couponDate, "D", -1);
-
-      const coupon6 = await allContracts.get(CouponTradeContractName).deploy(payer.newi({maxGas:maxGasAmount}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
+       
+      const Coupon = await ethers.getContractFactory(CouponTradeContractName);
+      const coupon6 = await Coupon.deploy(payer.newi({maxGas:maxGasAmount}), register.deployedAt, couponDate, nbDaysInPeriod, recordDate, cutOffTimeInSec);
       
       //check balances before transfer 1
       let balAbeforetransfer3 = await register.balanceOf(cak.call(), await investorA.account());

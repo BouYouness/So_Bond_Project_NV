@@ -1,7 +1,8 @@
 import { EthProviderInterface } from "@saturn-chain/dlt-tx-data-functions";
 import { SmartContractInstance } from "@saturn-chain/smart-contract";
-import allContracts from "../contracts";
+//import allContracts from "../contracts";
 import { today } from "./dates";
+const { ethers } = require("hardhat");
 
 export const RegisterContractName = "Register";
 export const PrimaryIssuanceContractName = "PrimaryIssuance";
@@ -15,11 +16,9 @@ export async function bilateralTrade(register: SmartContractInstance, from: EthP
   // console.log("Creating a bilateral trade", {from:await from.account(), to: await to.account(), qty, stage});
 
   //deploy bilateral trade
-  let trade: SmartContractInstance|undefined = undefined;
-  
-  trade = await allContracts
-  .get(BilateralTradeContractName)
-  .deploy(from.newi({ maxGas: 1000000 }), register.deployedAt, await to.account());
+  //let trade: SmartContractInstance|undefined = undefined;
+  const Trade = await ethers.getContractFactory("BilateralTrade");
+  const trade = await Trade.deploy(from.newi({ maxGas: 1000000 }), register.deployedAt, await to.account());
 
   let details = await trade.details(from.call());
   details.quantity = qty;

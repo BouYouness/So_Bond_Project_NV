@@ -8,10 +8,11 @@ import { Web3FunctionProvider } from "@saturn-chain/web3-functions";
 import { EthProviderInterface } from "@saturn-chain/dlt-tx-data-functions";
 import { EventData } from "web3-eth-contract";
 
-import allContracts from "../contracts";
+//import allContracts from "../contracts";   
 import { EventReceiver, SmartContract, SmartContractInstance } from "@saturn-chain/smart-contract";
 import { blockGasLimit, mintGas, registerGas } from "./gas.constant";
 import { makeBondDate, makeDateTime } from "./dates";
+const {ethers} = require('hardhat');
 
 const RegisterContractName = "Register";
 
@@ -51,9 +52,9 @@ describe("Register snapshot testing", function () {
     // const couponDates = [1309302208, 1309402208]; //UTC
     // const defaultCutofftime = 17 * 3600; //17:00
     
-    if (allContracts.get(RegisterContractName)) {
-      Register = allContracts.get(RegisterContractName);
-      instance = await Register.deploy(
+    if (RegisterContractName) {
+      const Registercontract = await ethers.getContractFactory(RegisterContractName);
+      instance = await Registercontract.deploy(
         cak.newi({ maxGas: registerGas }),
         bondName,
         isin,

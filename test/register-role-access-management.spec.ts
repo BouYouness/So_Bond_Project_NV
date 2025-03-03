@@ -7,11 +7,11 @@ import Ganache from "ganache";
 import { Web3FunctionProvider } from "@saturn-chain/web3-functions";
 import { EthProviderInterface } from "@saturn-chain/dlt-tx-data-functions";
 
-import allContracts from "../contracts";
+//import allContracts from "../contracts";
 import { SmartContract, SmartContractInstance } from "@saturn-chain/smart-contract";
-import { blockGasLimit, registerGas } from "./gas.constant";
-import { makeBondDate } from "./dates";
-
+import { blockGasLimit, registerGas } from "../test/gas.constant";
+import { makeBondDate } from "../test/dates";
+const {ethers} = require('hardhat');
 const RegisterContractName = "Register";
 const PrimaryIssuanceContractName = "PrimaryIssuance";
 
@@ -61,8 +61,9 @@ describe("Register - role management", function () {
     const maturityDate = dates.maturityDate
     const couponDates = dates.couponDates
     const defaultCutofftime = dates.defaultCutofftime
-    if (allContracts.get(RegisterContractName)) {
-      Register = allContracts.get(RegisterContractName);
+    if (RegisterContractName) {
+      
+      Register = await ethers.getContractFactory(RegisterContractName);
       sut = await Register.deploy(
         //Subject Under Test
         cak.newi({ maxGas: registerGas }),

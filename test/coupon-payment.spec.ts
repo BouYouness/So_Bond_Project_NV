@@ -6,11 +6,14 @@ import Web3 from "web3";
 import Ganache from "ganache";
 import { Web3FunctionProvider } from "@saturn-chain/web3-functions";
 import { EthProviderInterface } from "@saturn-chain/dlt-tx-data-functions";
-import allContracts from "../contracts";
+//import allContracts from "../contracts";
 import { SmartContract, SmartContractInstance } from "@saturn-chain/smart-contract";
 import { blockGasLimit, makeReadyGas, registerGas } from "./gas.constant";
 import { addPart, initWeb3Time, makeBondDate, mineBlock, today } from "./dates";
-import { RegisterContractName, BilateralTradeContractName, CouponTradeContractName, PrimaryIssuanceContractName, bilateralTrade } from "./shared";
+import {BilateralTradeContractName, CouponTradeContractName, bilateralTrade } from "./shared";
+
+const { ethers } = require("hardhat");
+
 
 
 describe("Coupon process - payment", function () {
@@ -51,9 +54,11 @@ describe("Coupon process - payment", function () {
     // const couponDates = [1671265505, 1671438626, 1672389833]; //UTC [17/12/2022/09h25m, 19/12/2022/09h30m, 30/12/2022/09h43]
     // const defaultCutofftime = 17 * 3600; //17:00
 
-    if (allContracts.get(RegisterContractName)) {
-      registerContract = allContracts.get(RegisterContractName);
-      register = await registerContract.deploy(
+    const RegisterContractName = "Register";
+
+    if (RegisterContractName) {
+      const Registercontract = await ethers.getContractFactory(RegisterContractName);
+      register = await Registercontract.deploy(
         cak.newi({ maxGas: registerGas }),
         bondName,
         isin,
@@ -84,7 +89,8 @@ describe("Coupon process - payment", function () {
     await register.enableInvestorToWhitelist(custodianA.send({ maxGas: 130000 }), await investorB.account());
 
     //initialization of the register  post issuance
-    const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({ maxGas: 1000000 }), register.deployedAt, 5000);
+    const Primary = await ethers.getContractFactory("PrimaryIssuance");
+    const primary = await Primary.deploy(bnd.newi({ maxGas: 1000000 }), register.deployedAt, 5000);
 
     await register.balanceOf(bnd.call(), await bnd.account());
 
@@ -93,8 +99,8 @@ describe("Coupon process - payment", function () {
     await register.enableContractToWhitelist(cak.send({ maxGas: 120000 }), hash1);
 
     //deploy bilateral trade
-    const trade = await allContracts
-      .get(BilateralTradeContractName)
+    const Trade = await ethers.getContractFactory("BilateralTrade");
+    const trade = await Trade
       .deploy(bnd.newi({ maxGas: 1000000 }), register.deployedAt, await investorA.account());
 
     //whitelist biletaral trade
@@ -131,8 +137,8 @@ describe("Coupon process - payment", function () {
     const couponDate = addPart(today(), "D", 30);
     const recordDate = addPart(couponDate, "D", -1);
 
-    const coupon = await allContracts
-      .get(CouponTradeContractName)
+    const Coupon = await ethers.getContractFactory("Coupon");
+    const coupon = await Coupon
       .deploy(payingAgent.newi({ maxGas: 2000000 }), register.deployedAt, couponDate, 360, recordDate, 17 * 3600);
 
     let hash = await register.atReturningHash(cak.call(), coupon.deployedAt);

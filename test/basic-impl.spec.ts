@@ -7,11 +7,15 @@ import Ganache from "ganache";
 import { Web3FunctionProvider } from "@saturn-chain/web3-functions";
 import { EthProviderInterface } from "@saturn-chain/dlt-tx-data-functions";
 import { EventData } from "web3-eth-contract";
-import allContracts from "../contracts";
+//import allContracts from "../artifacts/contracts";
 import { SmartContract, SmartContractInstance } from "@saturn-chain/smart-contract";
 import { blockGasLimit, makeReadyGas, registerGas } from "./gas.constant";
 import { makeBondDate } from "./dates";
 import { collectEvents, getEvents } from "./events";
+
+//import {Register} from "../typechain-types/contracts/Register"
+const { ethers } = require("hardhat");
+
 
 const RegisterContractName = "Register";
 const PrimaryIssuanceContractName = "PrimaryIssuance";
@@ -61,15 +65,15 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
     // const defaultCutofftime = 17 * 3600; //17:00
     
     console.log("deploying register");
-    if (allContracts.get(RegisterContractName)) {
-      registerContract = allContracts.get(RegisterContractName);
-      register = await registerContract.deploy(
-        async (name, bytes)=>{
+    if (RegisterContractName) {
+    const RegisterContract = await ethers.getContractFactory("Register");
+    register = await RegisterContract.deploy(
+       /* async (name, bytes)=>{
           const r = await (cak.test()(undefined as any,bytes));
           console.log("Deployment Required gas", r.result);
           
           return await cak.newi({maxGas: r.result})(name, bytes);
-        },
+        },*/
         bondName,
         isin,
         expectedSupply,
@@ -125,13 +129,15 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
     await register.enableInvestorToWhitelist(custodianA.send({maxGas:130000}), await investorD.account());
     // Have the CAK register the smart contracts
     
-    const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(cak.newi({maxGas:1000000}), register.deployedAt, 1500);
+    const Primary = await ethers.getContractFactory("PrimaryIssuance");
+    const primary = await Primary.deploy(cak.newi({maxGas:1000000}), register.deployedAt, 1500);
     
     let hash = await register.atReturningHash(cak.call(), primary.deployedAt);
     
     await register.enableContractToWhitelist(cak.send({maxGas:120000}), hash);
     
-    const trade = await allContracts.get(BilateralTradeContractName).deploy(cak.newi({maxGas:1000000}), register.deployedAt, await cak.account());
+    const Trade = await ethers.getContractFactory("BilateralTrade");
+    const trade = await Trade.deploy(cak.newi({maxGas:1000000}), register.deployedAt, await cak.account());
     
     hash = await register.atReturningHash(cak.call(), trade.deployedAt);
     
@@ -171,7 +177,8 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
       it("B&D should have the issuance amount", async () => {
         // Given the B&D deploys a Primary Issuance contract
-        const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({ maxGas: 1000000 }), register.deployedAt, 1500);
+        const Primary = await ethers.getContractFactory("PrimaryIssuance");
+        const primary = await Primary.deploy(bnd.newi({ maxGas: 1000000 }), register.deployedAt, 1500);
         
         // When the B&D finalize the transfer
         await primary.validate(bnd.send({ maxGas: 200000 }));
@@ -193,8 +200,8 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
     });
 
     it("BnD cannot finalize (validate()) Primary Issuance a second time", async () => {
-      const contract = allContracts.get(PrimaryIssuanceContractName);
-      const primary = await contract.deploy(bnd.newi({ maxGas: 1000000 }), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({ maxGas: 1000000 }), register.deployedAt, 1500);
       await primary.validate(bnd.send({ maxGas: 200000 })); //this changes the state of register so you need a fresh register for each test case
       await expect(primary.validate(bnd.send({ maxGas: 200000 }))).to.be.rejectedWith("The primary contract should be in initiated state");
     });  
@@ -208,20 +215,23 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
     it('PrimaryIssuance can only be deployed by BnD', async () => {
       //Only B&D role can deploy this contract
-      await expect(allContracts.get(PrimaryIssuanceContractName).deploy(custodianA.newi({maxGas:1000000}), register.deployedAt, 1500)).to.be.rejectedWith(
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      await expect(Primary.deploy(custodianA.newi({maxGas:1000000}), register.deployedAt, 1500)).to.be.rejectedWith(
         "Sender must be a B&D");
     }); 
 
 
     it("only B&D can finalize by calling primary.validate()", async () => {
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({ maxGas: 1000000 }), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({ maxGas: 1000000 }), register.deployedAt, 1500);
       //Only B&D role can call the function finalize
       await expect(primary.validate(custodianA.send({ maxGas: 200000 }))).to.be.rejectedWith("Sender must be a B&D");
     });
     
     it("primary.status should be changed after validate() was called", async () => {
       // Given the B&D deploys a Primary Issuance contract
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({ maxGas: 1000000 }), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({ maxGas: 1000000 }), register.deployedAt, 1500);
       // When the B&D finalize the transfer
       expect(await primary.status(bnd.call())).to.equal("1", "Status.Pending expected");
       await primary.validate(bnd.send({ maxGas: 200000 }));
@@ -230,31 +240,43 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
     it('should unit test each function - contract BilateralTrade - constructor - sender must be a valid investor ', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // The sender should be whitelisted
-      await expect(allContracts.get(BilateralTradeContractName).deploy(wrongAccount.newi({maxGas:1000000}), register.deployedAt, await investorA.account())).to.be.rejectedWith("Sender must be a valid investor");
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      await expect(
+        BilateralTradeContract.deploy(
+          wrongAccount.newi({ maxGas: 1000000 }),
+          register.deployedAt,
+          await investorA.account()
+        )
+      ).to.be.rejectedWith("Sender must be a valid investor");
     });
 
 
     it('should unit test each function - contract BilateralTrade - constructor - buyer must be a valid investor', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // The buyer should be whitelisted
-      await expect(allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await wrongAccount.account())).to.be.rejectedWith("Buyer must be a valid investor");
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      await expect( BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await wrongAccount.account())).to.be.rejectedWith("Buyer must be a valid investor");
     });
 
 
     it('should unit test each function - contract BilateralTrade - function setDetails - only the seller can update this trade', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       let details = await trade.details(bnd.call());
       details.quantity = 155;
       details.tradeDate = Date.UTC(2022, 9, 10) / (1000*3600*24);
@@ -266,11 +288,13 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
     it('should unit test each function - contract BilateralTrade - function setDetails - Cannot change the trade details unless in draft status', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       let details = await trade.details(bnd.call());
       details.quantity = 155;
       details.tradeDate = Date.UTC(2022, 9, 10) / (1000*3600*24);
@@ -289,11 +313,13 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
     it('should unit test each function - contract BilateralTrade - function setDetails - buyer must be a valid investor even on changing details', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       let details = await trade.details(bnd.call());
       details.quantity = 155;
       details.tradeDate = Date.UTC(2022, 9, 10) / (1000*3600*24);
@@ -309,11 +335,13 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
     it('should unit test each function - contract BilateralTrade - function approve - quantity not defined', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       let details = await trade.details(bnd.call());
       details.quantity = 0;
       details.tradeDate = Date.UTC(2022, 9, 10) / (1000*3600*24);
@@ -328,11 +356,13 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
     it('should unit test each function - contract BilateralTrade - function approve - trade date not defined', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       let details = await trade.details(bnd.call());
       details.quantity = 187;
       details.tradeDate = 0;
@@ -347,11 +377,13 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
     it('should unit test each function - contract BilateralTrade - function approve - value date not defined', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       let details = await trade.details(bnd.call());
       details.quantity = 187;
       details.tradeDate = Date.UTC(2022, 14, 12) / (1000*3600*24);
@@ -366,11 +398,13 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
     it('should unit test each function - contract BilateralTrade - function approve - the trade cannot be approved in this current status', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // When the B&D deploys a Bilateral Trade contract without setting details
-      const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       let details = await trade.details(bnd.call());
       details.quantity = 187;
       details.tradeDate = Date.UTC(2022, 14, 12) / (1000*3600*24);
@@ -391,11 +425,13 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
     it('should unit test each function - contract BilateralTrade - function approve - the trade cannot be rejected in this current status', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // When the B&D deploys a Bilateral Trade contract without setting details
-      const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       let details = await trade.details(bnd.call());
       details.quantity = 187;
       details.tradeDate = Date.UTC(2022, 14, 12) / (1000*3600*24);
@@ -415,8 +451,9 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
 
     it('should have the register initialized post issuance', async () => {
-
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+ 
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       // When the B&D finalize the transfer
       expect(await primary.status(bnd.call())).to.equal('1', "Pending status expected");
       await primary.validate(bnd.send({maxGas: 200000}));
@@ -428,15 +465,16 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
       const balanceOfBnD = await register.balanceOf(cak.call(), await bnd.account());
       expect(balanceOfBnD).to.be.equal('1000');
     });
-    
-    
+     
     it('should have the B&D prepare distribution to investor A', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       let details = await trade.details(bnd.call());
       details.quantity = 155;
       details.tradeDate = Date.UTC(2022, 9, 10) / (1000*3600*24);
@@ -465,14 +503,15 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
       
     });
 
-    
     it('should distribute the trade to investor A', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       let details = await trade.details(bnd.call());
       details.quantity = 155;
       details.tradeDate = Date.UTC(2022, 9, 10) / (1000*3600*24);
@@ -514,15 +553,15 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
       expect(balanceOfInvestorA).to.equal(details.quantity);
     });
 
-
-
     it('should reject a trade by the buyer', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorA.account());
       let details = await trade.details(bnd.call());
       details.quantity = 155;
       details.tradeDate = Date.UTC(2022, 9, 10) / (1000*3600*24);
@@ -546,19 +585,18 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
     //reject trade by seller
 
-    
-
-
     it('should distribute the trade to 2 more investors', async () => {
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
       
       const balanceBeforeTrades = await register.balanceOf(bnd.call(), await bnd.account());
       
       // First trade trade1 for Investor B
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade1 = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorB.account());
+      const BilateralTradeContract1 = await ethers.getContractFactory("BilateralTrade");
+      const trade1 = await BilateralTradeContract1.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorB.account());
       let details1 = await trade1.details(bnd.call());
       details1.quantity = 350;
       details1.tradeDate = Date.UTC(2022, 9, 10) / (1000*3600*24);
@@ -588,7 +626,8 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
       // Second trade trade2 for Investor C
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade2 = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorC.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade2 = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorC.account());
       let details2 = await trade2.details(bnd.call());
 
 
@@ -623,14 +662,13 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
 
     });
 
-
-
     // distribution to one more investor but trying to get more supply than B&D balance left
 
     it('should try to distribute the trade to one more investor but trade quantity too high', async () => {
       //FIXME: THIS TEST DEPENDS ON OTHERS TO PASS (bnd)
       // Given the B&D is registered and has purchased from the issuer
-      const primary = await allContracts.get(PrimaryIssuanceContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
+      const Primary = await ethers.getContractFactory("PrimaryIssuance");
+      const primary = await Primary.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, 1500);
       await primary.validate(bnd.send({maxGas: 200000}));
 
       const balanceBeforeTrades = await register.balanceOf(bnd.call(), await bnd.account());
@@ -638,7 +676,8 @@ describe("Run tests of the Issuance and Bilateral Trades contracts", function ()
       
       // First trade trade1 for Investor B
       // When the B&D deploys a Bilateral Trade contract and sets details
-      const trade3 = await allContracts.get(BilateralTradeContractName).deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorD.account());
+      const BilateralTradeContract = await ethers.getContractFactory("BilateralTrade");
+      const trade3 = await BilateralTradeContract.deploy(bnd.newi({maxGas:1000000}), register.deployedAt, await investorD.account());
       let details1 = await trade3.details(bnd.call());
       details1.quantity = 270;
       details1.tradeDate = Date.UTC(2022, 9, 10) / (1000*3600*24);
